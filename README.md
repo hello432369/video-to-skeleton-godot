@@ -64,13 +64,9 @@ python -m http.server 8080
 - **内存**：建议 8GB+
 - **硬盘**：50MB 可用空间
 
-## 模型下载链接（备用）
+## 运行环境
 
-如果 `pose_landmarker_lite.task` 文件有问题，可以从这里下载替换：
-
-```
-https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task
-```
+- 完全离线，模型（`pose_landmarker_lite.task`）和 WASM 库已内置，打开即用，无需任何下载
 
 ## 注意事项
 
