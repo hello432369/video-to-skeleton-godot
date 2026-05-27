@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>骨骼动画 · 视频描骨 + AI辅助</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;background:#0f0f14;color:#e0e0ee;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.topbar{background:#1a1a24;border-bottom:1px solid #2a2a3a;padding:0.5rem 1rem;display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;flex-shrink:0}
+.logo{font-weight:700;color:#7c6af0;font-size:0.95rem;white-space:nowrap}
+.btn{padding:0.35rem 0.8rem;border:1px solid #2a2a3a;background:#1a1a24;color:#e0e0ee;border-radius:6px;cursor:pointer;font-size:0.8rem;white-space:nowrap}
+.btn:hover{border-color:#7c6af0;background:#252538}
+.btn:disabled{opacity:0.4;cursor:not-allowed}
+.btn-primary{background:#7c6af0;border-color:#7c6af0;color:#fff}
+.btn-success{background:#2a6a3a;color:#6af0a0}
+.btn-warn{background:#3a2a1a;color:#f0c96a}
+.spacer{flex:1}
+.main{display:flex;flex:1;overflow:hidden}
+.cpanel{flex:1;display:flex;align-items:center;justify-content:center;background:#0a0a0f;position:relative;overflow:hidden}
+.cwrap{position:relative}
+#cvs{display:block;cursor:crosshair;background:#000}
+.placeholder{color:#3a3a5a;text-align:center;padding:2rem}
+.placeholder .icon{font-size:3rem}
+.side{width:280px;background:#14141e;border-left:1px solid #2a2a3a;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.stabs{display:flex;border-bottom:1px solid #2a2a3a;flex-shrink:0}
+.stab{flex:1;padding:0.5rem;background:transparent;border:none;color:#8888aa;cursor:pointer;font-size:0.8rem;border-bottom:2px solid transparent}
+.stab.active{color:#e0e0ee;border-bottom-color:#7c6af0;background:#1a1a24}
+.sbody{padding:0.8rem;flex:1;overflow-y:auto}
+.tbar{background:#1a1a24;border-top:1px solid #2a2a3a;padding:0.4rem 1rem;flex-shrink:0}
+.tctl{display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap}
+.finfo{color:#8888aa;font-size:0.78rem;min-width:7rem}
+.track{position:relative;height:24px;background:#0f0f14;border-radius:4px;border:1px solid #2a2a3a;cursor:pointer;overflow:hidden}
+.tlf{position:absolute;top:0;height:100%;width:2px;background:#2a2a3a}
+.tlf.ai{background:#3a6a4a}
+.tlf.kf{background:#f0c96a;width:6px;margin-left:-2px;border-radius:2px;z-index:2}
+.tlf.cur{background:#7c6af0;width:3px;z-index:3}
+.overlay{display:none;position:absolute;inset:0;background:rgba(0,0,0,0.7);z-index:10;align-items:center;justify-content:center;flex-direction:column;gap:0.5rem}
+.overlay.show{display:flex}
+.pw{width:300px;height:6px;background:#2a2a3a;border-radius:3px;overflow:hidden}
+.pf{height:100%;width:0%;background:linear-gradient(90deg,#7c6af0,#f0c96a);border-radius:3px}
+.bi{display:flex;align-items:center;gap:0.4rem;padding:0.2rem;font-size:0.78rem}
+.bd{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.stat{font-size:0.75rem;color:#8888aa}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;align-items:center;justify-content:center}
+.modal.show{display:flex}
+.mbox{background:#1a1a24;border:1px solid #3a3a5a;border-radius:12px;padding:1.5rem;max-width:500px;width:90%}
+.mbox textarea{width:100%;height:200px;background:#0f0f14;border:1px solid #2a2a3a;color:#e0e0ee;font-family:monospace;font-size:0.75rem;padding:0.5rem}
+.mact{display:flex;gap:0.5rem;margin-top:1rem}
+.fpi{width:40px;background:#0f0f14;border:1px solid #2a2a3a;color:#e0e0ee;text-align:center;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <span class="logo">🦴 骨骼动画</span>
+  <button class="btn btn-primary" id="btnLoad">📁 载入视频</button>
+  <input type="file" id="fileIn" accept="video/*" style="display:none">
+  <button class="btn btn-success" id="btnAi" disabled>🤖 AI识别</button>
+  <button class="btn btn-warn" id="btnExp" disabled>📦 导出</button>
+  <span class="spacer"></span>
+  <span class="stat" id="status">就绪</span>
+</div>
+<div class="main">
+  <div class="cpanel" id="cpanel">
+    <div class="placeholder" id="plh"><div class="icon">🎬</div><div>载入视频 → AI识别 → 修正 → 导出</div></div>
+    <div class="cwrap" id="cwrap" style="display:none"><canvas id="cvs"></canvas></div>
+    <div class="overlay" id="ovr">
+      <div id="ovrText">AI识别中…</div>
+      <div class="pw"><div class="pf" id="ovrBar"></div></div>
+    </div>
+  </div>
+  <div class="side">
+    <div class="stabs">
+      <button class="stab active" id="tab1">🦴 骨骼</button>
+      <button class="stab" id="tab2">❓ 说明</button>
+    </div>
+    <div class="sbody" id="sbody"><div class="placeholder" style="font-size:0.85rem">← 载入视频</div></div>
+  </div>
+</div>
+<div class="tbar">
+  <div class="tctl">
+    <button class="btn" id="b1" disabled>⏮</button>
+    <button class="btn" id="b2" disabled>◀</button>
+    <button class="btn btn-primary" id="b3" disabled>▶</button>
+    <button class="btn" id="b4" disabled>▶</button>
+    <button class="btn" id="b5" disabled>⏭</button>
+    <span class="finfo" id="fdisp">帧 0/0</span>
+    <button class="btn btn-warn" id="bKf" disabled>⭐K帧</button>
+    <button class="btn" id="bTw" disabled>〰补间</button>
+    <span class="spacer"></span>
+    <span style="font-size:0.75rem;color:#8888aa">FPS <input class="fpi" id="fps" value="30"></span>
+  </div>
+  <div class="track" id="track"></div>
+</div>
+
+<video id="vid" style="display:none"></video>
+
+<script>
+// ====== STATE ======
+const S = { v:null, ld:false, nf:0, cf:0, fps:30, lm:[], kf:[], ip:false, play:false, pt:null, vx:0, vy:0, vw:0, vh:0, vs:1 };
+
+const BN = [
+  {id:'r',nm:'根节点',cl:'#f0c96a'},
+  {id:'s',nm:'脊柱',cl:'#7c6af0',p:'r'},
+  {id:'h',nm:'头部',cl:'#6af0f0',p:'s',hi:0,ti:0},
+  {id:'ul',nm:'左大臂',cl:'#f06a6a',p:'s',hi:11,ti:13},
+  {id:'fl',nm:'左小臂',cl:'#f0906a',p:'ul',hi:13,ti:15},
+  {id:'hl',nm:'左手',cl:'#f0b06a',p:'fl',hi:15,ti:19},
+  {id:'ur',nm:'右大臂',cl:'#6a90f0',p:'s',hi:12,ti:14},
+  {id:'fr',nm:'右小臂',cl:'#6ab0f0',p:'ur',hi:14,ti:16},
+  {id:'hr',nm:'右手',cl:'#6ad0f0',p:'fr',hi:16,ti:20},
+  {id:'tl',nm:'左大腿',cl:'#6af0a0',p:'r',hi:23,ti:25},
+  {id:'sl',nm:'左小腿',cl:'#6af0c0',p:'tl',hi:25,ti:27},
+  {id:'ol',nm:'左脚',cl:'#6af0e0',p:'sl',hi:27,ti:31},
+  {id:'tr',nm:'右大腿',cl:'#a0f06a',p:'r',hi:24,ti:26},
+  {id:'sr',nm:'右小腿',cl:'#c0f06a',p:'tr',hi:26,ti:28},
+  {id:'or',nm:'右脚',cl:'#e0f06a',p:'sr',hi:28,ti:32},
+];
+
+function $(id){return document.getElementById(id)}
+const cvs=$('cvs'),ctx=cvs.getContext('2d'),vid=$('vid');
+function mid(a,b){return{x:(a.x+b.x)/2,y:(a.y+b.y)/2}}
+function lerp(a,b,t){return a+(b-a)*t}
+
+function resize(){
+  const r=$('cpanel').getBoundingClientRect();
+  cvs.width=Math.max(320,Math.min(r.width-20,960));
+  cvs.height=Math.max(240,Math.min(r.height-20,640));
+}
+
+function render(){
+  ctx.clearRect(0,0,cvs.width,cvs.height);
+  ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,cvs.height-60,cvs.width,60);
+  ctx.fillStyle='#fff';ctx.font='12px monospace';ctx.textAlign='left';
+  ctx.fillText('cf='+S.cf+' nf='+S.nf+' lm.len='+S.lm.length,10,cvs.height-40);
+  
+  if(S.ld && vid.videoWidth>0){
+    const sc=Math.min(cvs.width/vid.videoWidth,cvs.height/vid.videoHeight);
+    S.vx=(cvs.width-vid.videoWidth*sc)/2; S.vy=(cvs.height-vid.videoHeight*sc)/2;
+    S.vw=vid.videoWidth*sc; S.vh=vid.videoHeight*sc; S.vs=sc;
+    ctx.drawImage(vid,S.vx,S.vy,S.vw,S.vh);
+  }else{return}
+  const lm=(()=>{
+    const k=S.kf.find(x=>x.f===S.cf); if(k)return k.lm;
+    if(S.lm[S.cf])return S.lm[S.cf]; return null;
+  })();
+  
+  // Debug LM info
+  if(lm && lm.length){
+    ctx.fillStyle='#6af0a0';
+    ctx.fillText('LM OK: '+lm.length+' landmarks  x='+lm[0].x.toFixed(3)+' y='+lm[0].y.toFixed(3),10,cvs.height-22);
+  } else {
+    ctx.fillStyle='#f06a6a';
+    ctx.fillText('LM NULL - no data',10,cvs.height-22);
+    return;
+  }
+  
+  const m=p=>({x:p.x*S.vw+S.vx,y:p.y*S.vh+S.vy});
+  for(const b of BN){
+    let h,t;
+    if(b.id==='r'){const a=lm[23],c=lm[24];if(a&&c){h=m(mid(a,c));t=h}}
+    else if(b.id==='s'){const a=lm[23],c=lm[24],d=lm[11],e=lm[12];if(a&&c&&d&&e){h=m(mid(a,c));t=m(mid(d,e))}}
+    else if(b.id==='h'){const a=lm[11],c=lm[12],d=lm[0];if(a&&c)h=m(mid(a,c));if(d)t=m(d)}
+    else{if(b.hi!==null&&lm[b.hi])h=m(lm[b.hi]);if(b.ti!==null&&lm[b.ti])t=m(lm[b.ti])}
+    if(!h||!t)continue;
+    ctx.strokeStyle=b.cl+'cc';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(h.x,h.y);ctx.lineTo(t.x,t.y);ctx.stroke();
+    for(const p of[h,t]){ctx.fillStyle=b.cl;ctx.beginPath();ctx.arc(p.x,p.y,5,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke()}
+  }
+  ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(8,8,110,22);
+  ctx.fillStyle='#fff';ctx.font='13px monospace';ctx.textAlign='left';
+  ctx.fillText('帧 '+S.cf+'/'+S.nf,14,23);
+  if(S.kf.some(x=>x.f===S.cf)){ctx.fillStyle='#f0c96a';ctx.fillText('⭐',cvs.width-35,23)}
+}
+
+function seek(f){
+  S.cf=Math.max(0,Math.min(f,S.nf-1));
+  vid.currentTime=S.cf/S.fps;
+  $('fdisp').textContent='帧 '+S.cf+'/'+S.nf;
+  updTrack();render();
+}
+
+// ====== VIDEO ======
+$('btnLoad').onclick=()=>$('fileIn').click();
+$('fileIn').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  vid.src=URL.createObjectURL(f);vid.load();
+  vid.onloadedmetadata=()=>{
+    S.v=vid;S.ld=true;S.fps=30;S.nf=Math.floor(vid.duration*S.fps);
+    S.cf=0;S.lm=[];S.kf=[];S.ip=false;
+    resize();$('plh').style.display='none';$('cwrap').style.display='block';
+    S.enable(true);seek(0);showBones();status('已载入: '+f.name);
+  };
+};
+
+S.enable=function(on){
+  ['btnAi','b1','b2','b3','b4','b5','bKf'].forEach(id=>$(id).disabled=!on);
+  if(on){$('btnExp').disabled=true;$('bTw').disabled=true}
+};
+
+S.enable(false);
+
+// ====== AI ======
+let pose=null;
+async function runAi(){
+  $('btnAi').disabled=true;$('ovr').classList.add('show');
+  try{
+    const mod=await import('./wasm/vision_bundle.mjs');
+    const vis=await mod.FilesetResolver.forVisionTasks('./wasm/');
+    pose=await mod.PoseLandmarker.createFromOptions(vis,{
+      baseOptions:{modelAssetPath:'./pose_landmarker_lite.task',delegate:'GPU'},
+      runningMode:'VIDEO'
+    });
+  }catch(e){
+    $('ovr').classList.remove('show');$('btnAi').disabled=false;
+    status('❌ MediaPipe: '+e.message);return;
+  }
+  S.lm=new Array(S.nf).fill(null);S.kf=[];S.ip=false;$('bTw').disabled=true;
+  for(let f=0;f<S.nf;f++){
+    vid.currentTime=f/S.fps;
+    await new Promise(r=>{vid.onseeked=r});
+    // Wait for the frame to actually decode
+    await new Promise(r=>setTimeout(r,30));
+    // Draw to offscreen canvas to force decode
+    const tc=document.createElement('canvas');tc.width=2;tc.height=2;
+    tc.getContext('2d').drawImage(vid,0,0,2,2);
+    try{const r=pose.detectForVideo(vid,Math.round(f/S.fps*1000));if(r.landmarks&&r.landmarks[0])S.lm[f]=r.landmarks[0]}catch(e){}
+    if(f%5===0||f===S.nf-1){
+      $('ovrBar').style.width=((f+1)/S.nf*100).toFixed(0)+'%';
+      $('ovrText').textContent='AI识别 '+(f+1)+'/'+S.nf;render();
+    }
+  }
+  $('ovr').classList.remove('show');$('btnAi').disabled=false;
+  $('btnExp').disabled=false;$('bTw').disabled=false;
+  status('✅ 完成 '+S.nf+'帧');showBones();seek(0);
+}
+$('btnAi').onclick=runAi;
+
+// ====== TRACK ======
+function updTrack(){
+  const t=$('track');if(S.nf<1){t.innerHTML='';return}
+  const w=t.parentElement.clientWidth;t.innerHTML='';
+  for(let f=0;f<S.nf;f++){
+    const e=document.createElement('div');e.className='tlf';
+    if(S.lm[f])e.classList.add('ai');
+    if(S.kf.some(x=>x.f===f))e.classList.add('kf');
+    if(f===S.cf)e.classList.add('cur');
+    e.style.left=(f/S.nf*w)+'px';e.onclick=()=>seek(f);t.appendChild(e);
+  }
+}
+
+// ====== PLAYBACK ======
+['b1','b2','b4','b5'].forEach((id,i)=>{
+  const targets=[()=>0, ()=>S.cf-1, ()=>S.cf+1, ()=>S.nf-1];
+  $('b'+id[1]).onclick=()=>{const v=targets[i]();if(typeof v==='number')seek(v);};
+});
+$('b3').onclick=function(){
+  if(S.play){S.play=false;clearInterval(S.pt);this.textContent='▶';return}
+  S.play=true;this.textContent='⏸';
+  S.pt=setInterval(()=>{seek(S.cf+1);if(S.cf>=S.nf-1){S.play=false;clearInterval(S.pt);$('b3').textContent='▶'}},1000/S.fps);
+};
+$('fps').onchange=function(){S.fps=Math.max(1,Math.min(60,parseInt(this.value)||30))};
+
+// ====== KEYFRAMES ======
+$('bKf').onclick=()=>{
+  const lm=(()=>{const k=S.kf.find(x=>x.f===S.cf);if(k)return k.lm;if(S.lm[S.cf])return S.lm[S.cf];return null})();
+  if(!lm)return;
+  const i=S.kf.findIndex(x=>x.f===S.cf);if(i>=0)S.kf.splice(i,1);
+  S.kf.push({f:S.cf,lm});S.kf.sort((a,b)=>a.f-b.f);updTrack();render();
+};
+$('bTw').onclick=()=>{
+  if(S.kf.length<2)return;S.ip=true;
+  for(let f=0;f<S.nf;f++){
+    if(S.kf.some(x=>x.f===f))continue;
+    const p=S.kf.filter(x=>x.f<f).pop(),n=S.kf.find(x=>x.f>f);
+    if(!p||!n)continue;
+    const t=(f-p.f)/(n.f-p.f);
+    S.lm[f]=p.lm.map((q,i)=>{const r=n.lm[i];return{x:lerp(q.x,r.x,t),y:lerp(q.y,r.y,t),z:lerp(q.z||0,r.z||0,t),v:1}});
+  }
+  status('✅ 补间 ('+S.kf.length+'帧)');updTrack();render();
+};
+
+// Also update bones panel when seeking
+function updBones(){
+  const el=$('sbody');
+  // Update bone status line
+  const infoEl=el.querySelector('.bone-status');
+  if(!infoEl)return;
+  if(S.cf<S.lm.length && S.lm[S.cf]){
+    infoEl.innerHTML='✔ 当前帧: 有骨骼 ('+S.lm[S.cf].length+'点)';
+    infoEl.style.color='#6af0a0';
+  } else {
+    infoEl.innerHTML='✘ 当前帧: 无骨骼数据';
+    infoEl.style.color='#f06a6a';
+  }
+}
+// Patch seek to update bones panel
+const _origSeek=seek;
+seek=function(f){
+  S.cf=Math.max(0,Math.min(f,S.nf-1));
+  vid.currentTime=S.cf/S.fps;
+  $('fdisp').textContent='帧 '+S.cf+'/'+S.nf;
+  updTrack();render();updBones();
+};
+
+// ====== BONES ======
+function showBones(){
+  // Build hierarchy tree
+  const root = BN.filter(x=>!x.p);
+  let h='<div style="color:#7c6af0;font-size:0.75rem;margin-bottom:0.4rem">🦴 骨骼层级</div>';
+  function renderTree(items, depth){
+    for(const x of items){
+      const indent='&nbsp;'.repeat(depth*3);
+      const children=BN.filter(c=>c.p===x.id);
+      h+='<div class="bi" style="padding-left:'+(depth*12+4)+'px"><span class="bd" style="background:'+x.cl+'"></span><span>'+(depth>0?'└ ':'')+x.nm+'</span></div>';
+      if(children.length) renderTree(children, depth+1);
+    }
+  }
+  renderTree(root, 0);
+  // Debug info
+  const totalDir = S.lm.filter(x=>x!==null).length;
+  h+='<hr style="border-color:#2a2a3a;margin:0.5rem 0">';
+  h+='<div style="font-size:0.75rem;color:#8888aa">检测: '+totalDir+'/'+S.nf+'帧</div>';
+  if(S.cf<S.lm.length && S.lm[S.cf]){
+    h+='<div style="font-size:0.75rem;color:#6af0a0">当前帧: 有骨骼数据 ('+S.lm[S.cf].length+'点)</div>';
+  } else {
+    h+='<div style="font-size:0.75rem;color:#f06a6a">当前帧: 无骨骼数据</div>';
+  }
+  $('sbody').innerHTML=h;
+}
+
+// ====== EXPORT ======
+const SCALE = 300;
+function gx(p){ return (p.x-0.5)*SCALE; }
+function gy(p){ return (p.y-0.5)*SCALE; }  // MediaPipe Y-down = Godot Y-down, no negate
+
+function genScene(){
+  if(!S.lm||S.nf<1||!S.lm[0]) return '';
+  // For each frame, compute each bone's abs position + angle
+  const absFrames = [];
+  for(let f=0;f<S.nf;f++){
+    const lm=S.lm[f]; if(!lm){absFrames.push(null);continue;}
+    const fd={};
+    for(const b of BN){
+      let h,t;
+      if(b.id==='r'){const a=lm[23],c=lm[24],d=lm[11],e=lm[12];if(a&&c){h=mid(a,c);if(d&&e)t=mid(d,e);else t=h}}
+      else if(b.id==='s'){const a=lm[23],c=lm[24],d=lm[11],e=lm[12];if(a&&c&&d&&e){h=mid(a,c);t=mid(d,e)}}
+      else if(b.id==='h'){const a=lm[11],c=lm[12],d=lm[0];if(a&&c)h=mid(a,c);if(d)t=d}
+      else{if(b.hi!==null&&lm[b.hi])h=lm[b.hi];if(b.ti!==null&&lm[b.ti])t=lm[b.ti]}
+      if(!h||!t) continue;
+      fd[b.id]={x:gx(h),y:gy(h),a:Math.atan2(t.y-h.y,t.x-h.x)};
+    }
+    absFrames.push(fd);
+  }
+
+  // Convert to local coords (simple: child abs - parent abs, no rotation)
+  const localFrames = [];
+  for(let f=0;f<S.nf;f++){
+    const abs=absFrames[f]; if(!abs){localFrames.push(null);continue;}
+    const loc={};
+    for(const b of BN){
+      if(!abs[b.id]) continue;
+      let lx=abs[b.id].x, ly=abs[b.id].y, lr=0;
+      if(b.p && abs[b.p]){
+        lx=abs[b.id].x-abs[b.p].x;
+        ly=abs[b.id].y-abs[b.p].y;
+      }
+      loc[b.id]={x:+lx.toFixed(2), y:+ly.toFixed(2), r:0};
+    }
+    localFrames.push(loc);
+  }
+
+  // Build scene
+  let s='[gd_scene format=3]\n\n';
+  s+='[sub_resource type="Animation" id="anim_1"]\n';
+  s+='length = '+(S.nf/S.fps).toFixed(3)+'\n';
+  s+='loop_mode = 1\n';
+
+  let trackN=0;
+  for(const b of BN){
+    // Build bone path
+    let bpath=b.id;
+    let cur=b;
+    while(cur.p){
+      const par=BN.find(x=>x.id===cur.p);
+      if(par){bpath=par.id+'/'+bpath; cur=par;}
+      else break;
+    }
+
+    // Position track - write ALL frames
+    const ptimes=[], pvals=[];
+    for(let f=0;f<S.nf;f++){
+      const lf=localFrames[f]; if(!lf||!lf[b.id]) continue;
+      ptimes.push((f/S.fps).toFixed(3));
+      pvals.push('Vector2('+lf[b.id].x.toFixed(2)+', '+lf[b.id].y.toFixed(2)+')');
+    }
+    if(ptimes.length>1){
+      s+='tracks/'+trackN+'/type = "value"\n';
+      s+='tracks/'+trackN+'/path = NodePath("'+bpath+':position")\n';
+      s+='tracks/'+trackN+'/interp = 1\n';
+      s+='tracks/'+trackN+'/loop_wrap = true\n';
+      s+='tracks/'+trackN+'/keys = {\n';
+      s+='"times": PackedFloat32Array('+ptimes.join(',')+'),\n';
+      s+='"transitions": PackedFloat32Array('+ptimes.map(()=>'1').join(',')+'),\n';
+      s+='"update": 0,\n';
+      s+='"values": ['+pvals.join(',')+']\n';
+      s+='}\n';
+      trackN++;
+    }
+
+
+  }
+
+  s+='\n';
+
+  // Rest pose from first valid frame
+  let ri=0; while(ri<S.nf&&!localFrames[ri]) ri++;
+  const rp=localFrames[ri]||{};
+
+  // Calculate bone lengths from first frame (abs position)
+  const boneLen={};
+  for(const b of BN){
+    const abs=absFrames[ri]; if(!abs||!abs[b.id]) continue;
+    const hx=abs[b.id].x, hy=abs[b.id].y;
+    // Find tail (next joint along the bone)
+    let tx=hx, ty=hy;
+    if(b.id==='r'){ /* root length from hip to shoulder */
+      if(abs.s){tx=abs.s.x; ty=abs.s.y;}
+    } else if(b.id==='s'){
+      if(abs.h){tx=abs.h.x; ty=abs.h.y;}
+    } else if(b.id==='h'){
+      // head - use a small default
+    } else {
+      // arm/leg bones have hi and ti
+      const lm=S.lm[ri];
+      if(lm){
+        const tailIdx=b.ti;
+        if(tailIdx!==null&&lm[tailIdx]){
+          tx=gx(lm[tailIdx]); ty=gy(lm[tailIdx]);
+        }
+      }
+    }
+    const dx=tx-hx, dy=ty-hy;
+    boneLen[b.id]=Math.round(Math.sqrt(dx*dx+dy*dy))||20;
+  }
+
+  // AnimationLibrary (must come before nodes)
+  s+='[sub_resource type="AnimationLibrary" id="AnimationLibrary_1"]\n';
+  s+='_data = {\n';
+  s+='&"walk": SubResource("anim_1")\n';
+  s+='}\n\n';
+
+  // Skeleton2D root
+  s+='[node name="Character" type="Skeleton2D"]\n';
+  s+='position = Vector2(400, 300)\n\n';
+
+  // Write bone nodes
+  function writeBNode(id, depth){
+    const b=BN.find(x=>x.id===id); if(!b) return;
+    const pd='\t'.repeat(depth);
+    // Parent path
+    let pp='.';
+    let cur=b;
+    if(cur.p){
+      let ppPath='';
+      let p=BN.find(x=>x.id===cur.p);
+      while(p){ppPath=p.id+'/'+ppPath; p=BN.find(x=>x.id===p.p);}
+      pp=ppPath.replace(/\/$/,'');
+    }
+    s+=pd+'[node name="'+b.id+'" type="Bone2D" parent="'+pp+'"]\n';
+    const bp=rp[b.id];
+    if(bp){
+      s+=pd+'position = Vector2('+bp.x.toFixed(2)+', '+bp.y.toFixed(2)+')\n';
+      if(bp.r!==0) s+=pd+'rotation = '+bp.r.toFixed(4)+'\n';
+    }
+    s+=pd+'length = '+(boneLen[b.id]||20)+'\n\n';
+    for(const k of BN.filter(c=>c.p===id)) writeBNode(k.id, depth+1);
+  }
+  writeBNode('r', 1);
+
+  // AnimationPlayer
+  s+='\t[node name="AnimationPlayer" type="AnimationPlayer" parent="."]\n';
+  s+='\t\troot_node = NodePath("..")\n';
+  s+='\t\tlibraries/ = SubResource("AnimationLibrary_1")\n\n';
+
+  // Sprite placeholder
+  s+='\t[node name="Sprite" type="Sprite2D" parent="."]\n';
+  s+='\t\ttexture = null\n';
+
+  return s;
+}
+
+$('btnExp').onclick=()=>{
+  const s=genScene();
+  if(!s||s.length<100){
+    status('❌ 数据不足，请先AI识别');
+    return;
+  }
+  const b=new Blob([s],{type:'text/plain'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b);
+  a.download='character.tscn';
+  a.click();
+  status('✅ 已下载 character.tscn');
+};
+// ====== TABS ======
+$('tab1').onclick=function(){
+  document.querySelectorAll('.stab').forEach(x=>x.classList.remove('active'));
+  this.classList.add('active');showBones();
+};
+$('tab2').onclick=function(){
+  document.querySelectorAll('.stab').forEach(x=>x.classList.remove('active'));
+  this.classList.add('active');
+  $('sbody').innerHTML='<div style="font-size:0.85rem;color:#ccc;line-height:1.8">'
+    +'<b style="color:#f0c96a">使用流程</b><br>'
+    +'1.📁 载入视频<br>2.🤖 AI识别骨骼<br>3.逐帧检查→按⭐K帧修正<br>'
+    +'4.〰补间填充中间帧<br>5.📦 导出Godot<br><br>'
+    +'<b style="color:#7c6af0">快捷键</b><br>'
+    +'← → 逐帧前进后退<br>空格 播放/暂停<br>K 记录关键帧</div>';
+};
+
+// ====== UTILS ======
+function status(m){$('status').textContent=m}
+window.onresize=()=>{if(S.ld)resize()};
+document.onkeydown=e=>{
+  if(e.key==='ArrowRight'){e.preventDefault();seek(S.cf+1)}
+  if(e.key==='ArrowLeft'){e.preventDefault();seek(S.cf-1)}
+  if(e.key===' '){e.preventDefault();$('b3').click()}
+  if(e.key==='k'||e.key==='K'){$('bKf').click()}
+};
+console.log('🦴 骨骼动画工具 v2');
+</script>
+</body>
+</html>

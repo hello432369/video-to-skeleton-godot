@@ -1,0 +1,80 @@
+# 骨骼动画工具 · AI 初稿 + 人工修正
+
+## 文件说明
+
+| 文件 | 大小 | 说明 |
+|---|---|---|
+| `index.html` | ~30KB | 主工具页面，双击打开 |
+| `pose_landmarker_lite.task` | 5.5MB | MediaPipe AI 模型，本地加载 |
+
+## 使用流程
+
+### 1. 载入视频
+- 点击「载入视频」选一个走路/跳舞的 MP4
+- 或者直接把视频文件拖进窗口
+
+### 2. AI 自动识别（全自动，0 成本）
+- 点击「AI 骨骼识别」
+- 工具逐帧检测人体 33 个关键点
+- 自动生成骨骼动画初稿
+- **全程浏览器本地运行，视频不出电脑**
+
+### 3. 人工修正
+- 拖动时间轴逐帧检查
+- 直接拖拽骨骼控制点修正 AI 偏差
+- 按 K 键记录修正后的关键帧
+
+### 4. 自动补间
+- 点击「补间填充」，自动算出关键帧之间的过渡
+
+### 5. 导出 Godot
+- 点击「导出 Godot 动画」
+- 下载 .tres 文件
+- 拖进 Godot 项目，挂到 Skeleton2D 节点上
+
+## 关键技术
+
+- **MediaPipe Pose** — Google 开源人体姿态检测，纯本地 WASM 运行
+- **Canvas 2D** — 骨骼绘制 + 拖拽交互
+- **Godot .tres 格式** — 纯文本，直接导入
+
+## 启动方式
+
+因为浏览器安全策略限制，需要 HTTP 服务才能运行。
+
+**Mac：** 双击 `启动.command`，或终端运行：
+```bash
+cd 骨骼动画工具
+python3 -m http.server 8080
+```
+
+**Windows：** 双击 `启动.bat`，或终端运行：
+```cmd
+cd 骨骼动画工具
+python -m http.server 8080
+```
+
+然后在浏览器打开 `http://localhost:8080`。
+
+## 配置要求
+
+- **系统**：macOS / Windows / Linux
+- **浏览器**：Chrome / Edge / Safari（最新版）
+- **网络**：完全离线，已包含 WASM 库
+- **内存**：建议 8GB+
+- **硬盘**：50MB 可用空间
+
+## 模型下载链接（备用）
+
+如果 `pose_landmarker_lite.task` 文件有问题，可以从这里下载替换：
+
+```
+https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task
+```
+
+## 注意事项
+
+- 建议用**纯侧面视角**的走路/跑步视频效果最好
+- 视频不要太长（3-5 秒最佳），否则逐帧处理会慢
+- AI 识别后一定要手动检查手部遮挡的帧
+- 导出的 .tres 需要在 Godot 里建立对应的 Bone2D 层级
