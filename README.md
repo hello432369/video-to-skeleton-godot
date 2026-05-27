@@ -40,19 +40,8 @@
 
 ## 启动方式
 
-因为浏览器安全策略限制，需要 HTTP 服务才能运行。
-
-**Mac：** 双击 `启动.command`，或终端运行：
-```bash
-cd 骨骼动画工具
-python3 -m http.server 8080
-```
-
-**Windows：** 双击 `启动.bat`，或终端运行：
-```cmd
-cd 骨骼动画工具
-python -m http.server 8080
-```
+**Mac：** 双击 `Mac双击启动.command`  
+**Windows：** 双击 `Windows双击启动.bat`
 
 然后在浏览器打开 `http://localhost:8080`。
 
